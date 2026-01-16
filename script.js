@@ -19,6 +19,30 @@ window.addEventListener('mousemove', (e) => {
     mouse.y = e.clientY;
 });
 
+// Touch events for mobile devices
+window.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (e.touches.length > 0) {
+        mouse.x = e.touches[0].clientX;
+        mouse.y = e.touches[0].clientY;
+    }
+}, { passive: false });
+
+window.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (e.touches.length > 0) {
+        mouse.x = e.touches[0].clientX;
+        mouse.y = e.touches[0].clientY;
+    }
+}, { passive: false });
+
+window.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    // Move mouse position off-screen when touch ends
+    mouse.x = -1000;
+    mouse.y = -1000;
+}, { passive: false });
+
 function createFlower(x, y, size, color) {
     flowers.push({
         x: x,
