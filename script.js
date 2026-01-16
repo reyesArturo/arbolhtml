@@ -19,8 +19,8 @@ window.addEventListener('mousemove', (e) => {
     mouse.y = e.clientY;
 });
 
-// Touch events for mobile devices
-window.addEventListener('touchstart', (e) => {
+// Touch events for mobile devices - only on canvas
+canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
     if (e.touches.length > 0) {
         mouse.x = e.touches[0].clientX;
@@ -28,7 +28,7 @@ window.addEventListener('touchstart', (e) => {
     }
 }, { passive: false });
 
-window.addEventListener('touchmove', (e) => {
+canvas.addEventListener('touchmove', (e) => {
     e.preventDefault();
     if (e.touches.length > 0) {
         mouse.x = e.touches[0].clientX;
@@ -36,7 +36,7 @@ window.addEventListener('touchmove', (e) => {
     }
 }, { passive: false });
 
-window.addEventListener('touchend', (e) => {
+canvas.addEventListener('touchend', (e) => {
     e.preventDefault();
     // Move mouse position off-screen when touch ends
     mouse.x = -1000;
