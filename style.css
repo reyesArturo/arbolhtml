@@ -1,10 +1,13 @@
 body {
     margin: 0;
     padding: 0;
-    background: #f5e8dc;
-    /* Color crema del video */
+    background: linear-gradient(135deg, #f5e8dc 0%, #ffeef2 100%);
     font-family: 'Quicksand', sans-serif;
     overflow: hidden;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 #error {
@@ -43,51 +46,124 @@ body {
 
 #ui-container {
     position: absolute;
-    z-index: 10;
+    z-index: 100;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    padding: 2rem;
+    border-radius: 20px;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    transition: opacity 0.5s ease;
 }
 
-#startButton {
-    padding: 15px 30px;
-    font-size: 20px;
-    background: linear-gradient(135deg, #ff4d6d 0%, #ff758f 100%);
-    color: white;
+#question {
+    font-family: 'Dancing Script', cursive;
+    font-size: 3rem;
+    color: #ff4d6d;
+    margin-bottom: 2rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.buttons {
+    display: flex;
+    gap: 30px;
+    justify-content: center;
+    min-height: 60px;
+    align-items: center;
+}
+
+button {
+    padding: 12px 35px;
+    font-size: 1.2rem;
+    font-weight: bold;
     border: none;
     border-radius: 50px;
     cursor: pointer;
-    box-shadow: 0 10px 20px rgba(255, 77, 109, 0.3);
-    transition: all 0.3s ease;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     font-family: 'Quicksand', sans-serif;
+    outline: none;
 }
 
-#startButton:hover {
-    transform: scale(1.05) translateY(-3px);
-    box-shadow: 0 15px 25px rgba(255, 77, 109, 0.4);
+#siButton {
+    background: linear-gradient(135deg, #ff4d6d 0%, #ff758f 100%);
+    color: white;
+    box-shadow: 0 10px 20px rgba(255, 77, 109, 0.3);
+    order: 1;
 }
 
-#startButton:active {
-    transform: scale(0.98);
+#noButton {
+    background: #fff;
+    color: #ff4d6d;
+    border: 2px solid #ff4d6d;
+    position: relative;
+    z-index: 1000;
+    order: 2;
+    transition: left 0.1s ease-out, top 0.1s ease-out, transform 0.3s ease;
 }
 
-@keyframes pulse {
+#teasingEmoji {
+    position: fixed;
+    font-size: 3rem;
+    z-index: 2000;
+    pointer-events: none;
+    animation: teaseFade 0.8s ease-out forwards;
+}
+
+@keyframes teaseFade {
     0% {
-        transform: scale(1);
+        opacity: 1;
+        transform: scale(0.5) rotate(0deg);
     }
 
     50% {
-        transform: scale(1.05);
+        opacity: 1;
+        transform: scale(1.2) rotate(15deg);
     }
 
     100% {
-        transform: scale(1);
+        opacity: 0;
+        transform: scale(0.8) rotate(-15deg);
     }
 }
 
-#startButton {
-    animation: pulse 2s infinite ease-in-out;
+#spotify-container {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 100;
+    animation: fadeIn 1s ease-in;
+}
+
+.spotify-link {
+    display: inline-block;
+    padding: 10px 20px;
+    background: #1DB954;
+    color: white;
+    text-decoration: none;
+    border-radius: 50px;
+    font-weight: bold;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 15px rgba(29, 185, 84, 0.3);
+    transition: all 0.3s ease;
+}
+
+.spotify-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(29, 185, 84, 0.4);
+    background: #1ed760;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 canvas {

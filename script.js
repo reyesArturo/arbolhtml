@@ -196,19 +196,92 @@ function timeElapse(date) {
     document.getElementById("elapseClock").innerHTML = `${days} días, ${hours} horas, ${minutes} minutos, ${remainingSeconds} segundos`;
 }
 
-const startButton = document.getElementById('startButton');
+const siButton = document.getElementById('siButton');
+const noButton = document.getElementById('noButton');
 const uiContainer = document.getElementById('ui-container');
+const spotifyContainer = document.getElementById('spotify-container');
 const words = document.getElementById('words');
 const startDate = new Date("2024-01-01T00:00:00");
 
-startButton.addEventListener('click', () => {
-    uiContainer.style.display = 'none';
+// Lógica para que el botón "No" se teletransporte lejos del puntero
+let offsetX = 0;
+let offsetY = 0;
+let lastMoveTime = 0;
+const teasingEmoji = document.getElementById('teasingEmoji');
+
+document.addEventListener('mousemove', (e) => {
+    const radius = 150; // Radio de detección
+    const rect = noButton.getBoundingClientRect();
+    const buttonCenterX = rect.left + rect.width / 2;
+    const buttonCenterY = rect.top + rect.height / 2;
+
+    const dx = buttonCenterX - e.clientX;
+    const dy = buttonCenterY - e.clientY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // Si el mouse está demasiado cerca, teletransportar el botón
+    if (distance < radius) {
+        const now = Date.now();
+        // Limitar la frecuencia de teletransporte para evitar parpadeo
+        if (now - lastMoveTime > 100) {
+            // Mostrar emoji en la posición actual del botón
+            teasingEmoji.style.left = `${buttonCenterX - 25}px`;
+            teasingEmoji.style.top = `${buttonCenterY - 25}px`;
+            teasingEmoji.style.display = 'block';
+
+            // Reiniciar animación
+            teasingEmoji.style.animation = 'none';
+            setTimeout(() => {
+                teasingEmoji.style.animation = 'teaseFade 0.8s ease-out forwards';
+            }, 10);
+
+            // Ocultar después de la animación
+            setTimeout(() => {
+                teasingEmoji.style.display = 'none';
+            }, 800);
+
+            // Calcular una nueva posición aleatoria lejos del mouse
+            const angle = Math.random() * Math.PI * 2;
+            const minDistance = 250; // Distancia mínima del mouse
+            const randomDistance = minDistance + Math.random() * 150;
+
+            const newOffsetX = Math.cos(angle) * randomDistance;
+            const newOffsetY = Math.sin(angle) * randomDistance;
+
+            // Limitar para que no se salga demasiado
+            const maxOffsetX = 350;
+            const maxOffsetYUp = 350;
+            const maxOffsetYDown = 80;
+
+            offsetX = Math.max(-maxOffsetX, Math.min(maxOffsetX, newOffsetX));
+
+            if (newOffsetY > 0) {
+                offsetY = Math.min(maxOffsetYDown, newOffsetY);
+            } else {
+                offsetY = Math.max(-maxOffsetYUp, newOffsetY);
+            }
+
+            noButton.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+            lastMoveTime = now;
+        }
+    }
+});
+
+siButton.addEventListener('click', () => {
+    uiContainer.style.opacity = '0';
     setTimeout(() => {
+        uiContainer.style.display = 'none';
+        spotifyContainer.style.display = 'block';
         words.style.display = 'block';
         words.style.opacity = '1';
-        timeElapse(startDate);
-        setInterval(() => timeElapse(startDate), 1000);
-    }, 1500);
+
+        // Iniciar el reloj si existe el elemento (estaba comentado en HTML pero por si acaso)
+        const clockElem = document.getElementById("elapseClock");
+        if (clockElem) {
+            timeElapse(startDate);
+            setInterval(() => timeElapse(startDate), 1000);
+        }
+    }, 500);
 
     animate();
     startGrowth(canvas.width / 2, canvas.height * 0.85, 110, 0, 12);
