@@ -108,61 +108,96 @@ function renderFlower(f) {
     if (f.opacity < 1) f.opacity += 0.03;
 }
 
-function startGrowth(x, y, len, angle, thickness) {
-    growthQueue.push({ x, y, len, angle, thickness });
-}
+// Crear flores por toda la pantalla
+function createBouquet() {
+    const colors = ['#FFB7C5', '#F4C2C2', '#E6E6FA', '#FFDAB9', '#FADADD', '#D8BFD8', '#FFE4E1', '#FFC0CB', '#FFB6C1', '#FFA07A'];
 
-function processGrowth() {
-    if (growthQueue.length === 0) return;
+    // Crear un patrón de flores distribuidas por toda la pantalla
+    const rows = 8;
+    const cols = 12;
+    const marginX = 80;
+    const marginY = 60;
 
-    // Procesar hasta 3 ramas por frame para mayor fluidez sin saturar
-    const branchesToProcess = Math.min(growthQueue.length, 3);
+    const availableWidth = canvas.width - (marginX * 2);
+    const availableHeight = canvas.height - (marginY * 2);
 
-    for (let i = 0; i < branchesToProcess; i++) {
-        const b = growthQueue.shift();
-        if (b.len < 5) continue;
+    const spacingX = availableWidth / (cols - 1);
+    const spacingY = availableHeight / (rows - 1);
 
-        const endX = b.x + b.len * Math.sin(b.angle * Math.PI / 180);
-        const endY = b.y - b.len * Math.cos(b.angle * Math.PI / 180);
+    let delay = 0;
 
-        // Dibujar rama inmediatamente
-        ctx.beginPath();
-        ctx.strokeStyle = "#5c4033";
-        ctx.lineWidth = b.thickness;
-        ctx.lineCap = 'round';
-        ctx.moveTo(b.x, b.y);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            // Añadir algo de aleatoriedad a la posición
+            const randomOffsetX = (Math.random() - 0.5) * 40;
+            const randomOffsetY = (Math.random() - 0.5) * 40;
 
-        // Generar flores de forma tupida
-        if (b.len < 45) {
-            const colors = ['#FFB7C5', '#F4C2C2', '#E6E6FA', '#FFDAB9', '#FADADD', '#D8BFD8'];
-            const count = b.len < 15 ? 5 : 2;
-            for (let j = 0; j < count; j++) {
+            const x = marginX + (col * spacingX) + randomOffsetX;
+            const y = marginY + (row * spacingY) + randomOffsetY;
+
+            // Variar el tamaño de las flores
+            const size = 8 + Math.random() * 8;
+
+            setTimeout(() => {
+                // Dibujar un tallo simple
+                ctx.strokeStyle = "#4a7c59";
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(x, y + size * 2);
+                ctx.lineTo(x, y + size * 4);
+                ctx.stroke();
+
+                // Añadir hojas ocasionalmente
+                if (Math.random() > 0.7) {
+                    ctx.fillStyle = "#5a9c6f";
+                    ctx.beginPath();
+                    ctx.ellipse(x - 5, y + size * 3, 4, 8, -0.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.ellipse(x + 5, y + size * 3.5, 4, 8, 0.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
                 createFlower(
-                    endX + (Math.random() - 0.5) * 30,
-                    endY + (Math.random() - 0.5) * 30,
-                    4 + Math.random() * 6,
+                    x,
+                    y,
+                    size,
                     colors[Math.floor(Math.random() * colors.length)]
                 );
-            }
-        }
+            }, delay);
 
-        // Añadir hijos a la cola
-        growthQueue.push({ x: endX, y: endY, len: b.len * 0.78, angle: b.angle - 28, thickness: b.thickness * 0.7 });
-        growthQueue.push({ x: endX, y: endY, len: b.len * 0.78, angle: b.angle + 28, thickness: b.thickness * 0.7 });
-        if (Math.random() > 0.7) {
-            growthQueue.push({ x: endX, y: endY, len: b.len * 0.5, angle: b.angle + (Math.random() - 0.5) * 15, thickness: b.thickness * 0.6 });
+            delay += 30; // Reducir el delay para que aparezcan más rápido
         }
+    }
+
+    // Añadir flores adicionales aleatorias para llenar espacios
+    for (let i = 0; i < 40; i++) {
+        const x = marginX + Math.random() * availableWidth;
+        const y = marginY + Math.random() * availableHeight;
+        const size = 6 + Math.random() * 6;
+
+        setTimeout(() => {
+            ctx.strokeStyle = "#4a7c59";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(x, y + size * 2);
+            ctx.lineTo(x, y + size * 3.5);
+            ctx.stroke();
+
+            createFlower(
+                x,
+                y,
+                size,
+                colors[Math.floor(Math.random() * colors.length)]
+            );
+        }, delay);
+
+        delay += 25;
     }
 }
 
 function animate() {
-    // Dibujamos las flores sobre las ramas ya dibujadas
-    // Para que las ramas no desaparezcan, NO limpiamos todo el canvas indiscriminadamente
-    // Usamos una técnica de capas:
-
-    // 1. Guardar el estado actual de las ramas
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = canvas.width;
     tempCanvas.height = canvas.height;
@@ -171,14 +206,7 @@ function animate() {
 
     function loop() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(tempCanvas, 0, 0); // Redibujar ramas estáticas
-
-        processGrowth();
-
-        // Si seguimos creciendo, actualizar la "capa estática" de ramas
-        if (growthQueue.length > 0) {
-            tempCtx.drawImage(canvas, 0, 0);
-        }
+        ctx.drawImage(tempCanvas, 0, 0);
 
         flowers.forEach(f => renderFlower(f));
         requestAnimationFrame(loop);
@@ -284,5 +312,5 @@ siButton.addEventListener('click', () => {
     }, 500);
 
     animate();
-    startGrowth(canvas.width / 2, canvas.height * 0.85, 110, 0, 12);
+    createBouquet();
 });
