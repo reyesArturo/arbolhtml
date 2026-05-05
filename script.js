@@ -1,5 +1,5 @@
 /**
- * Sonic Cosmos - Diana's Ritual Edition (Question First)
+ * Sonic Cosmos - Cinematic Intro Sequence
  */
 
 class SoundJourney {
@@ -33,23 +33,42 @@ class SoundJourney {
         this.setupGate(); 
         this.setupThreeJS();
         this.setupEventListeners();
+        this.runIntroSequence(); // Iniciar la secuencia visual
 
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
-        
-        // Cargamos datos en background si hay token, pero NO revelamos la app todavía
         this.accessToken = localStorage.getItem('spotify_access_token');
         
         if (code) {
             await this.exchangeCodeForToken(code);
             window.history.replaceState({}, document.title, window.location.pathname); 
-            // Incluso después de volver de Spotify, le mostramos la pregunta
         }
 
         if (this.accessToken || code) {
             await this.loadUserData();
             await this.fetchUserTopTracks(this.currentRange);
         }
+    }
+
+    // --- CINEMATIC INTRO ---
+    runIntroSequence() {
+        const intro = document.getElementById('gate-intro');
+        const question = document.getElementById('gate-question-container');
+
+        // Paso 1: Mostrar título (ya lo hace el CSS con animación)
+        // Paso 2: Después de 2.5 segundos, cambiar a la pregunta
+        setTimeout(() => {
+            gsap.to(intro, { 
+                opacity: 0, 
+                y: -50, 
+                duration: 1, 
+                onComplete: () => {
+                    intro.style.display = 'none';
+                    question.style.display = 'flex';
+                    gsap.to(question, { opacity: 1, duration: 1 });
+                }
+            });
+        }, 2500);
     }
 
     // --- GATE LOGIC ---
@@ -67,6 +86,7 @@ class SoundJourney {
         };
 
         window.addEventListener('mousemove', (e) => {
+            if (!btnNo) return;
             const rect = btnNo.getBoundingClientRect();
             const distance = Math.sqrt(
                 Math.pow(e.clientX - (rect.left + rect.width / 2), 2) + 
@@ -77,8 +97,6 @@ class SoundJourney {
 
         btnNo.addEventListener('mouseover', teleport);
         btnSi.addEventListener('click', () => {
-            // Cuando Diana responda "SÍ", revelamos la app
-            // Si ya está logueada (tiene accessToken), hacemos auto-scroll
             const hasSession = !!localStorage.getItem('spotify_access_token');
             this.revealApp(hasSession);
         });
