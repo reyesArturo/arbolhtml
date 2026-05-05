@@ -1,316 +1,328 @@
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
+/**
+ * The Sound Journey - Interactive Gate (Contained Fix)
+ */
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+class SoundJourney {
+    constructor() {
+        this.clientId = '067c567e47684a17b62e82ebc212c692'; 
+        this.redirectUri = window.location.origin + window.location.pathname;
+        if (this.redirectUri.endsWith('/')) this.redirectUri = this.redirectUri.slice(0, -1);
 
-let flowers = [];
-let growthQueue = [];
-let mouse = { x: -1000, y: -1000 };
-let isAnimating = false;
+        this.scopes = ['user-top-read', 'user-read-private', 'user-read-email'];
+        this.isPlaying = false;
+        this.audio = null;
+        this.currentRange = 'short_term';
 
-window.addEventListener('resize', () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-});
+        this.mouse = new THREE.Vector2(0, 0);
+        this.targetMouse = new THREE.Vector2(0, 0);
 
-window.addEventListener('mousemove', (e) => {
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-});
-
-// Touch events for mobile devices - only on canvas
-canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    if (e.touches.length > 0) {
-        mouse.x = e.touches[0].clientX;
-        mouse.y = e.touches[0].clientY;
-    }
-}, { passive: false });
-
-canvas.addEventListener('touchmove', (e) => {
-    e.preventDefault();
-    if (e.touches.length > 0) {
-        mouse.x = e.touches[0].clientX;
-        mouse.y = e.touches[0].clientY;
-    }
-}, { passive: false });
-
-canvas.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    // Move mouse position off-screen when touch ends
-    mouse.x = -1000;
-    mouse.y = -1000;
-}, { passive: false });
-
-function createFlower(x, y, size, color) {
-    flowers.push({
-        x: x,
-        y: y,
-        originalX: x,
-        originalY: y,
-        size: size,
-        color: color,
-        seed: Math.random() * 100,
-        opacity: 0
-    });
-}
-
-function renderFlower(f) {
-    const dx = mouse.x - f.x;
-    const dy = mouse.y - f.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    // Interacción suave con el mouse
-    if (dist < 120) {
-        const force = (120 - dist) / 120;
-        f.x -= dx * force * 0.08;
-        f.y -= dy * force * 0.08;
-    } else {
-        f.x += (f.originalX - f.x) * 0.06;
-        f.y += (f.originalY - f.y) * 0.06;
+        this.compliments = [
+            "¡Sabía que tenías buen gusto!",
+            "Tu playlist es puro fuego 🔥",
+            "Vaya temazos tienes guardados...",
+            "Tu vicio musical es de otro nivel ✨",
+            "Esa canción es una joya 💎",
+            "Tienes un estilo impecable 👌",
+            "Tu historia musical es increíble 🚀"
+        ];
+        
+        this.init();
     }
 
-    const sway = Math.sin(Date.now() * 0.0015 + f.seed) * 1.5;
+    async init() {
+        this.setupGate(); 
+        this.setupThreeJS();
+        this.setupEventListeners();
 
-    ctx.save();
-    ctx.translate(f.x + sway, f.y + sway);
-    ctx.rotate(f.seed + (sway * 0.03));
-    ctx.globalAlpha = f.opacity;
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        if (code) {
+            await this.exchangeCodeForToken(code);
+            window.history.replaceState({}, document.title, window.location.pathname); 
+            this.revealApp(); 
+        }
 
-    const petalCount = 5;
-    for (let i = 0; i < petalCount; i++) {
-        ctx.save();
-        ctx.rotate((Math.PI * 2) / petalCount * i);
-
-        ctx.beginPath();
-        const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, f.size * 1.5);
-        grad.addColorStop(0, '#fff');
-        grad.addColorStop(0.4, f.color);
-        grad.addColorStop(1, f.color);
-        ctx.fillStyle = grad;
-
-        ctx.moveTo(0, 0);
-        ctx.bezierCurveTo(f.size, -f.size, f.size * 2, -f.size / 2, f.size * 1.5, 0);
-        ctx.bezierCurveTo(f.size * 2, f.size / 2, f.size, f.size, 0, 0);
-        ctx.fill();
-        ctx.restore();
-    }
-
-    // Centro
-    ctx.beginPath();
-    ctx.fillStyle = "#FFD700";
-    ctx.arc(0, 0, f.size / 2.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-
-    if (f.opacity < 1) f.opacity += 0.03;
-}
-
-// Crear flores por toda la pantalla
-function createBouquet() {
-    const colors = ['#FFB7C5', '#F4C2C2', '#E6E6FA', '#FFDAB9', '#FADADD', '#D8BFD8', '#FFE4E1', '#FFC0CB', '#FFB6C1', '#FFA07A'];
-
-    // Crear un patrón de flores distribuidas por toda la pantalla
-    const rows = 8;
-    const cols = 12;
-    const marginX = 80;
-    const marginY = 60;
-
-    const availableWidth = canvas.width - (marginX * 2);
-    const availableHeight = canvas.height - (marginY * 2);
-
-    const spacingX = availableWidth / (cols - 1);
-    const spacingY = availableHeight / (rows - 1);
-
-    let delay = 0;
-
-    for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-            // Añadir algo de aleatoriedad a la posición
-            const randomOffsetX = (Math.random() - 0.5) * 40;
-            const randomOffsetY = (Math.random() - 0.5) * 40;
-
-            const x = marginX + (col * spacingX) + randomOffsetX;
-            const y = marginY + (row * spacingY) + randomOffsetY;
-
-            // Variar el tamaño de las flores
-            const size = 8 + Math.random() * 8;
-
-            setTimeout(() => {
-                // Dibujar un tallo simple
-                ctx.strokeStyle = "#4a7c59";
-                ctx.lineWidth = 2;
-                ctx.lineCap = 'round';
-                ctx.beginPath();
-                ctx.moveTo(x, y + size * 2);
-                ctx.lineTo(x, y + size * 4);
-                ctx.stroke();
-
-                // Añadir hojas ocasionalmente
-                if (Math.random() > 0.7) {
-                    ctx.fillStyle = "#5a9c6f";
-                    ctx.beginPath();
-                    ctx.ellipse(x - 5, y + size * 3, 4, 8, -0.5, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.beginPath();
-                    ctx.ellipse(x + 5, y + size * 3.5, 4, 8, 0.5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-
-                createFlower(
-                    x,
-                    y,
-                    size,
-                    colors[Math.floor(Math.random() * colors.length)]
-                );
-            }, delay);
-
-            delay += 30; // Reducir el delay para que aparezcan más rápido
+        this.accessToken = localStorage.getItem('spotify_access_token');
+        if (this.accessToken) {
+            await this.loadUserData();
+            await this.fetchUserTopTracks(this.currentRange);
         }
     }
 
-    // Añadir flores adicionales aleatorias para llenar espacios
-    for (let i = 0; i < 40; i++) {
-        const x = marginX + Math.random() * availableWidth;
-        const y = marginY + Math.random() * availableHeight;
-        const size = 6 + Math.random() * 6;
+    // --- GATE LOGIC ---
+    setupGate() {
+        const btnNo = document.getElementById('btn-no');
+        const btnSi = document.getElementById('btn-si');
+        const container = document.getElementById('gate-cage');
+        
+        const teleport = () => {
+            btnNo.style.position = 'absolute';
+            // Margen de seguridad para que no toque los bordes (5px)
+            const margin = 10;
+            const maxX = container.clientWidth - btnNo.offsetWidth - margin;
+            const maxY = container.clientHeight - btnNo.offsetHeight - margin;
+            
+            const randomX = Math.max(margin, Math.random() * maxX);
+            const randomY = Math.max(margin, Math.random() * maxY);
+            
+            btnNo.style.left = `${randomX}px`;
+            btnNo.style.top = `${randomY}px`;
+        };
 
-        setTimeout(() => {
-            ctx.strokeStyle = "#4a7c59";
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(x, y + size * 2);
-            ctx.lineTo(x, y + size * 3.5);
-            ctx.stroke();
-
-            createFlower(
-                x,
-                y,
-                size,
-                colors[Math.floor(Math.random() * colors.length)]
+        window.addEventListener('mousemove', (e) => {
+            const rect = btnNo.getBoundingClientRect();
+            const btnCenterX = rect.left + rect.width / 2;
+            const btnCenterY = rect.top + rect.height / 2;
+            
+            const distance = Math.sqrt(
+                Math.pow(e.clientX - btnCenterX, 2) + 
+                Math.pow(e.clientY - btnCenterY, 2)
             );
-        }, delay);
 
-        delay += 25;
-    }
-}
-
-function animate() {
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = canvas.width;
-    tempCanvas.height = canvas.height;
-    const tempCtx = tempCanvas.getContext('2d');
-    tempCtx.drawImage(canvas, 0, 0);
-
-    function loop() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(tempCanvas, 0, 0);
-
-        flowers.forEach(f => renderFlower(f));
-        requestAnimationFrame(loop);
-    }
-    loop();
-}
-
-function timeElapse(date) {
-    const current = new Date();
-    const seconds = (Date.parse(current) - Date.parse(date)) / 1000;
-    const days = Math.floor(seconds / (3600 * 24));
-    const hours = Math.floor((seconds % (3600 * 24)) / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    document.getElementById("elapseClock").innerHTML = `${days} días, ${hours} horas, ${minutes} minutos, ${remainingSeconds} segundos`;
-}
-
-const siButton = document.getElementById('siButton');
-const noButton = document.getElementById('noButton');
-const uiContainer = document.getElementById('ui-container');
-const spotifyContainer = document.getElementById('spotify-container');
-const words = document.getElementById('words');
-const startDate = new Date("2024-01-01T00:00:00");
-
-// Lógica para que el botón "No" se teletransporte lejos del puntero
-let offsetX = 0;
-let offsetY = 0;
-let lastMoveTime = 0;
-const teasingEmoji = document.getElementById('teasingEmoji');
-
-document.addEventListener('mousemove', (e) => {
-    const radius = 150; // Radio de detección
-    const rect = noButton.getBoundingClientRect();
-    const buttonCenterX = rect.left + rect.width / 2;
-    const buttonCenterY = rect.top + rect.height / 2;
-
-    const dx = buttonCenterX - e.clientX;
-    const dy = buttonCenterY - e.clientY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // Si el mouse está demasiado cerca, teletransportar el botón
-    if (distance < radius) {
-        const now = Date.now();
-        // Limitar la frecuencia de teletransporte para evitar parpadeo
-        if (now - lastMoveTime > 100) {
-            // Mostrar emoji en la posición actual del botón
-            teasingEmoji.style.left = `${buttonCenterX - 25}px`;
-            teasingEmoji.style.top = `${buttonCenterY - 25}px`;
-            teasingEmoji.style.display = 'block';
-
-            // Reiniciar animación
-            teasingEmoji.style.animation = 'none';
-            setTimeout(() => {
-                teasingEmoji.style.animation = 'teaseFade 0.8s ease-out forwards';
-            }, 10);
-
-            // Ocultar después de la animación
-            setTimeout(() => {
-                teasingEmoji.style.display = 'none';
-            }, 800);
-
-            // Calcular una nueva posición aleatoria lejos del mouse
-            const angle = Math.random() * Math.PI * 2;
-            const minDistance = 250; // Distancia mínima del mouse
-            const randomDistance = minDistance + Math.random() * 150;
-
-            const newOffsetX = Math.cos(angle) * randomDistance;
-            const newOffsetY = Math.sin(angle) * randomDistance;
-
-            // Limitar para que no se salga demasiado
-            const maxOffsetX = 350;
-            const maxOffsetYUp = 350;
-            const maxOffsetYDown = 80;
-
-            offsetX = Math.max(-maxOffsetX, Math.min(maxOffsetX, newOffsetX));
-
-            if (newOffsetY > 0) {
-                offsetY = Math.min(maxOffsetYDown, newOffsetY);
-            } else {
-                offsetY = Math.max(-maxOffsetYUp, newOffsetY);
+            if (distance < 70) {
+                teleport();
             }
+        });
 
-            noButton.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
-            lastMoveTime = now;
+        btnNo.addEventListener('mouseover', teleport);
+        btnNo.addEventListener('click', (e) => { e.preventDefault(); teleport(); return false; });
+
+        btnSi.addEventListener('click', () => this.revealApp());
+    }
+
+    revealApp() {
+        const gate = document.getElementById('gate-overlay');
+        const app = document.getElementById('app-content');
+        gate.style.opacity = '0';
+        setTimeout(() => { gate.style.visibility = 'hidden'; }, 1000);
+        app.style.opacity = '1';
+        app.style.pointerEvents = 'auto';
+        document.body.style.overflowY = 'auto'; 
+    }
+
+    getRandomCompliment() {
+        return this.compliments[Math.floor(Math.random() * this.compliments.length)];
+    }
+
+    // --- SPOTIFY LOGIC ---
+    async login() {
+        const verifier = this.generateRandomString(128);
+        const challenge = await this.generateCodeChallenge(verifier);
+        localStorage.setItem('spotify_code_verifier', verifier);
+        const args = new URLSearchParams({
+            response_type: 'code', client_id: this.clientId,
+            scope: this.scopes.join(' '), redirect_uri: this.redirectUri,
+            code_challenge_method: 'S256', code_challenge: challenge, show_dialog: true
+        });
+        window.location.href = `https://accounts.spotify.com/authorize?${args}`;
+    }
+
+    async exchangeCodeForToken(code) {
+        const verifier = localStorage.getItem('spotify_code_verifier');
+        const body = new URLSearchParams({
+            grant_type: 'authorization_code', code: code,
+            redirect_uri: this.redirectUri, client_id: this.clientId, code_verifier: verifier,
+        });
+        const res = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+        });
+        const data = await res.json();
+        if (data.access_token) {
+            localStorage.setItem('spotify_access_token', data.access_token);
+            this.accessToken = data.access_token;
         }
     }
-});
 
-siButton.addEventListener('click', () => {
-    uiContainer.style.opacity = '0';
-    setTimeout(() => {
-        uiContainer.style.display = 'none';
-        spotifyContainer.style.display = 'block';
-        words.style.display = 'block';
-        words.style.opacity = '1';
+    generateRandomString(l) {
+        let t = ''; const p = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        for (let i = 0; i < l; i++) t += p.charAt(Math.floor(Math.random() * p.length));
+        return t;
+    }
 
-        // Iniciar el reloj si existe el elemento (estaba comentado en HTML pero por si acaso)
-        const clockElem = document.getElementById("elapseClock");
-        if (clockElem) {
-            timeElapse(startDate);
-            setInterval(() => timeElapse(startDate), 1000);
+    async generateCodeChallenge(v) {
+        const d = new TextEncoder().encode(v);
+        const dg = await window.crypto.subtle.digest('SHA-256', d);
+        return btoa(String.fromCharCode.apply(null, new Uint8Array(dg)))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    async fetchWebApi(e) {
+        const r = await fetch(`https://api.spotify.com/v1/${e}`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('spotify_access_token')}` }
+        });
+        if (r.status === 401) { localStorage.removeItem('spotify_access_token'); this.login(); return null; }
+        return await r.json();
+    }
+
+    async loadUserData() {
+        const user = await this.fetchWebApi('me');
+        if (user) {
+            const avatar = document.getElementById('user-avatar');
+            if (avatar) {
+                avatar.style.display = 'block';
+                avatar.src = user.images[0]?.url || 'https://i.pravatar.cc/150';
+            }
+            const name = user.display_name.split(' ')[0];
+            document.getElementById('hero-title').textContent = `¡Hola, ${name}!`;
         }
-    }, 500);
+    }
 
-    animate();
-    createBouquet();
-});
+    async fetchUserTopTracks(range) {
+        const data = await this.fetchWebApi(`me/top/tracks?time_range=${range}&limit=20`);
+        if (data && data.items) {
+            this.renderSongs(data.items);
+            document.getElementById('dynamic-compliment').textContent = this.getRandomCompliment();
+        }
+    }
+
+    renderSongs(tracks) {
+        const container = document.getElementById('song-list');
+        container.innerHTML = '';
+        tracks.forEach((track, index) => {
+            const row = document.createElement('div');
+            row.className = 'song-row';
+            row.innerHTML = `
+                <img src="${track.album.images[0]?.url}" alt="Art">
+                <div class="song-info">
+                    <div class="song-title">${track.name}</div>
+                    <div class="song-artist">${track.artists[0].name}</div>
+                </div>
+                <div class="song-duration">${this.formatDuration(track.duration_ms)}</div>
+            `;
+            row.addEventListener('click', () => this.playSong({
+                title: track.name, artist: track.artists[0].name,
+                art: track.album.images[0]?.url, preview_url: track.preview_url
+            }));
+            container.appendChild(row);
+        });
+    }
+
+    formatDuration(ms) {
+        const m = Math.floor(ms / 60000);
+        const s = ((ms % 60000) / 1000).toFixed(0);
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    setupThreeJS() {
+        const container = document.getElementById('three-container');
+        if(!container) return;
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        this.camera.position.z = 20;
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(this.renderer.domElement);
+        const amount = 100;
+        const positions = new Float32Array(amount * amount * 3);
+        const initialPositions = new Float32Array(amount * amount * 3);
+        let idx = 0;
+        for (let ix = 0; ix < amount; ix++) {
+            for (let iy = 0; iy < amount; iy++) {
+                const x = ix * 0.6 - (amount * 0.6) / 2;
+                const z = iy * 0.6 - (amount * 0.6) / 2;
+                positions[idx] = initialPositions[idx] = x;
+                positions[idx + 1] = initialPositions[idx + 1] = 0;
+                positions[idx + 2] = initialPositions[idx + 2] = z;
+                idx += 3;
+            }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const mat = new THREE.PointsMaterial({ size: 0.05, color: 0x1DB954, transparent: true, opacity: 0.4 });
+        this.points = new THREE.Points(geo, mat);
+        this.scene.add(this.points);
+
+        let count = 0;
+        const animate = () => {
+            requestAnimationFrame(animate);
+            this.mouse.x += (this.targetMouse.x - this.mouse.x) * 0.1;
+            this.mouse.y += (this.targetMouse.y - this.mouse.y) * 0.1;
+            const pos = this.points.geometry.attributes.position.array;
+            let i = 0;
+            const amp = this.isPlaying ? 2 : 0.5;
+            for (let ix = 0; ix < amount; ix++) {
+                for (let iy = 0; iy < amount; iy++) {
+                    const ixPos = initialPositions[i];
+                    const izPos = initialPositions[i + 2];
+                    let newY = (Math.sin((ix + count) * 0.3) * amp) + (Math.sin((iy + count) * 0.5) * amp);
+                    const dx = ixPos - (this.mouse.x * 20);
+                    const dz = izPos - (-this.mouse.y * 20);
+                    const dist = Math.sqrt(dx*dx + dz*dz);
+                    if (dist < 5) newY += (5 - dist) * 1.5;
+                    pos[i + 1] = newY;
+                    i += 3;
+                }
+            }
+            this.points.geometry.attributes.position.needsUpdate = true;
+            this.camera.position.x += (this.mouse.x * 2 - this.camera.position.x) * 0.05;
+            this.camera.position.y += (-this.mouse.y * 2 + 8 - this.camera.position.y) * 0.05;
+            this.camera.lookAt(0, 0, 0);
+            count += this.isPlaying ? 0.08 : 0.03;
+            this.renderer.render(this.scene, this.camera);
+        };
+        animate();
+    }
+
+    setupEventListeners() {
+        window.addEventListener('scroll', () => {
+            const scroll = window.scrollY;
+            const viewportH = window.innerHeight;
+            const progress = Math.min(scroll / viewportH, 1);
+            this.camera.position.z = 20 - (progress * 15);
+            const hero = document.getElementById('hero');
+            const listView = document.getElementById('list-view');
+            hero.style.opacity = 1 - (progress * 2.5);
+            if (progress > 0.4) {
+                listView.classList.add('active-view');
+                listView.style.opacity = (progress - 0.4) * 2.5;
+            } else {
+                listView.classList.remove('active-view');
+                listView.style.opacity = 0;
+            }
+        });
+
+        document.getElementById('login-btn-hero')?.addEventListener('click', () => this.login());
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.currentRange = btn.dataset.range;
+                await this.fetchUserTopTracks(this.currentRange);
+            });
+        });
+        document.querySelector('.play-pause-btn')?.addEventListener('click', () => this.togglePlay());
+        window.addEventListener('mousemove', (e) => {
+            this.targetMouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            this.targetMouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        });
+    }
+
+    playSong(song) {
+        this.isPlaying = true;
+        const player = document.getElementById('player-bar');
+        player.style.transform = 'translateX(-50%) translateY(0)';
+        document.getElementById('current-title').textContent = song.title;
+        document.getElementById('current-artist').textContent = song.artist;
+        document.getElementById('current-album-art').src = song.art;
+        document.querySelector('.play-pause-btn i').className = 'fas fa-pause';
+        document.getElementById('player-comment').textContent = this.getRandomCompliment();
+        if (song.preview_url) {
+            if (this.audio) this.audio.pause();
+            this.audio = new Audio(song.preview_url);
+            this.audio.play();
+        }
+        gsap.killTweensOf('.progress-fill');
+        gsap.fromTo('.progress-fill', { width: '0%' }, { width: '100%', duration: 30, ease: 'none' });
+    }
+
+    togglePlay() {
+        if (!this.audio) return;
+        this.isPlaying = !this.isPlaying;
+        const icon = document.querySelector('.play-pause-btn i');
+        if (this.isPlaying) { icon.className = 'fas fa-pause'; this.audio.play(); }
+        else { icon.className = 'fas fa-play'; this.audio.pause(); }
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => new SoundJourney());
