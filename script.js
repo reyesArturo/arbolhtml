@@ -1,11 +1,13 @@
 /**
- * Sonic Cosmos - Musical Objects & Fix Edition
+ * Sonic Cosmos - Diana's Ritual Edition (Question First)
  */
 
 class SoundJourney {
     constructor() {
         this.clientId = '067c567e47684a17b62e82ebc212c692'; 
+        
         this.redirectUri = window.location.origin + window.location.pathname;
+        if (this.redirectUri.endsWith('index.html')) this.redirectUri = this.redirectUri.replace('index.html', '');
         if (this.redirectUri.endsWith('/')) this.redirectUri = this.redirectUri.slice(0, -1);
 
         this.scopes = ['user-top-read', 'user-read-private', 'user-read-email'];
@@ -15,10 +17,9 @@ class SoundJourney {
 
         this.mouse = new THREE.Vector2(0, 0);
         this.targetMouse = new THREE.Vector2(0, 0);
-        this.clickPulse = 0;
         
         this.compliments = [
-            "¡Sabía que tenías buen gusto!",
+            "¡Sabía que tenías buen gusto, Diana!",
             "Tu playlist es puro fuego 🔥",
             "Vaya temazos tienes guardados...",
             "Tu vicio musical es de otro nivel ✨",
@@ -35,17 +36,19 @@ class SoundJourney {
 
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
+        
+        // Cargamos datos en background si hay token, pero NO revelamos la app todavía
+        this.accessToken = localStorage.getItem('spotify_access_token');
+        
         if (code) {
             await this.exchangeCodeForToken(code);
             window.history.replaceState({}, document.title, window.location.pathname); 
-            this.revealApp(); 
+            // Incluso después de volver de Spotify, le mostramos la pregunta
         }
 
-        this.accessToken = localStorage.getItem('spotify_access_token');
-        if (this.accessToken) {
+        if (this.accessToken || code) {
             await this.loadUserData();
             await this.fetchUserTopTracks(this.currentRange);
-            this.revealApp(); // FIX: Si ya hay token, saltar la pregunta
         }
     }
 
@@ -73,23 +76,39 @@ class SoundJourney {
         });
 
         btnNo.addEventListener('mouseover', teleport);
-        btnSi.addEventListener('click', () => this.revealApp());
+        btnSi.addEventListener('click', () => {
+            // Cuando Diana responda "SÍ", revelamos la app
+            // Si ya está logueada (tiene accessToken), hacemos auto-scroll
+            const hasSession = !!localStorage.getItem('spotify_access_token');
+            this.revealApp(hasSession);
+        });
     }
 
-    revealApp() {
+    revealApp(autoScroll = false) {
         const gate = document.getElementById('gate-overlay');
         const app = document.getElementById('app-content');
         if (!gate || !app) return;
+        
         gate.style.opacity = '0';
         setTimeout(() => { 
-            gate.style.display = 'none'; // Quitar del DOM para que no bloquee clics
+            gate.style.display = 'none'; 
         }, 800);
+        
         app.style.opacity = '1';
         app.style.pointerEvents = 'auto';
         document.body.style.overflowY = 'auto'; 
+
+        if (autoScroll) {
+            setTimeout(() => {
+                window.scrollTo({
+                    top: window.innerHeight,
+                    behavior: 'smooth'
+                });
+            }, 500);
+        }
     }
 
-    // --- 3D MUSICAL ENGINE ---
+    // --- 3D ENGINE ---
     setupThreeJS() {
         const container = document.getElementById('three-container');
         this.scene = new THREE.Scene();
@@ -99,65 +118,29 @@ class SoundJourney {
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         container.appendChild(this.renderer.domElement);
 
-        // Ondas
         this.ribbons = [];
-        const numRibbons = 10;
-        for (let r = 0; r < numRibbons; r++) {
-            const points = 150;
-            const pos = new Float32Array(points * 3);
+        for (let r = 0; r < 10; r++) {
+            const pArr = new Float32Array(150 * 3);
             const initialY = (r - 5) * 2;
-            for(let p=0; p<points; p++) {
-                pos[p*3] = (p/points)*50 - 25;
-                pos[p*3+1] = initialY;
-                pos[p*3+2] = (Math.random()-0.5)*5;
-            }
-            const geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            for(let p=0; p<150; p++) { pArr[p*3] = (p/150)*50 - 25; pArr[p*3+1] = initialY; pArr[p*3+2] = (Math.random()-0.5)*5; }
+            const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pArr, 3));
             const mat = new THREE.PointsMaterial({ size: 0.1, color: 0x1DB954, transparent: true, opacity: 0.4 });
-            const pts = new THREE.Points(geo, mat);
-            pts.userData = { initialY };
-            this.scene.add(pts);
-            this.ribbons.push(pts);
+            const pts = new THREE.Points(geo, mat); pts.userData = { initialY };
+            this.scene.add(pts); this.ribbons.push(pts);
         }
 
-        // --- AÑADIR VINILOS 3D ---
         this.vinyls = [];
         const vinylGeo = new THREE.CylinderGeometry(2, 2, 0.1, 32);
         const vinylMat = new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 100 });
-        const labelGeo = new THREE.CircleGeometry(0.6, 32);
-        const labelMat = new THREE.MeshBasicMaterial({ color: 0x1DB954 });
-
         for(let i=0; i<4; i++) {
-            const group = new THREE.Group();
-            const disc = new THREE.Mesh(vinylGeo, vinylMat);
-            disc.rotation.x = Math.PI/2;
-            const label = new THREE.Mesh(labelGeo, labelMat);
-            label.position.z = 0.06;
-            group.add(disc);
-            group.add(label);
-            group.position.set((Math.random()-0.5)*40, (Math.random()-0.5)*20, (Math.random()-0.5)*10);
-            group.userData = { rotSpeed: 0.02 + Math.random()*0.02 };
-            this.scene.add(group);
-            this.vinyls.push(group);
+            const v = new THREE.Mesh(vinylGeo, vinylMat);
+            v.rotation.x = Math.PI/2;
+            v.position.set((Math.random()-0.5)*40, (Math.random()-0.5)*20, (Math.random()-0.5)*10);
+            v.userData = { rotSpeed: 0.02 + Math.random()*0.02 };
+            this.scene.add(v); this.vinyls.push(v);
         }
 
-        // --- AÑADIR NOTAS MUSICALES ---
-        this.notes = [];
-        const noteGeo = new THREE.SphereGeometry(0.3, 16, 16);
-        const noteStemGeo = new THREE.CylinderGeometry(0.05, 0.05, 1, 8);
-        for(let i=0; i<10; i++) {
-            const note = new THREE.Group();
-            const head = new THREE.Mesh(noteGeo, labelMat);
-            const stem = new THREE.Mesh(noteStemGeo, labelMat);
-            stem.position.set(0.2, 0.5, 0);
-            note.add(head); note.add(stem);
-            note.position.set((Math.random()-0.5)*50, (Math.random()-0.5)*30, (Math.random()-0.5)*15);
-            this.scene.add(note);
-            this.notes.push(note);
-        }
-
-        const ambient = new THREE.AmbientLight(0xffffff, 0.5);
-        this.scene.add(ambient);
+        this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
         const spot = new THREE.PointLight(0x1DB954, 2, 50);
         this.scene.add(spot);
 
@@ -166,45 +149,23 @@ class SoundJourney {
             requestAnimationFrame(animate);
             this.mouse.x += (this.targetMouse.x - this.mouse.x) * 0.1;
             this.mouse.y += (this.targetMouse.y - this.mouse.y) * 0.1;
-
-            const beat = this.isPlaying ? 1 + Math.sin(count*0.2)*0.2 : 1;
-
-            // Animar Ondas
-            this.ribbons.forEach(ribbon => {
-                const p = ribbon.geometry.attributes.position.array;
-                for(let i=0; i<p.length/3; i++) {
-                    const x = p[i*3];
-                    const dy = ribbon.userData.initialY - (this.mouse.y * 15);
+            this.ribbons.forEach(rib => {
+                const pos = rib.geometry.attributes.position.array;
+                for(let i=0; i<pos.length/3; i++) {
+                    const x = pos[i*3];
                     const dist = Math.abs(x - (this.mouse.x * 30));
-                    let offset = Math.sin(x*0.2 + count*0.05) * (this.isPlaying ? 2 : 0.5);
-                    if (dist < 5) offset += (5-dist)*1.5;
-                    p[i*3+1] = ribbon.userData.initialY + offset;
+                    let off = Math.sin(x*0.2 + count*0.05) * (this.isPlaying ? 2 : 0.5);
+                    if (dist < 5) off += (5-dist)*1.5;
+                    pos[i*3+1] = rib.userData.initialY + off;
                 }
-                ribbon.geometry.attributes.position.needsUpdate = true;
+                rib.geometry.attributes.position.needsUpdate = true;
             });
-
-            // Animar Vinilos
-            this.vinyls.forEach(v => {
-                v.rotation.z += v.userData.rotSpeed * (this.isPlaying ? 3 : 1);
-                v.scale.setScalar(beat);
-                // Movimiento suave
-                v.position.y += Math.sin(count*0.02 + v.position.x)*0.01;
-            });
-
-            // Animar Notas
-            this.notes.forEach(n => {
-                n.position.x += 0.02;
-                if(n.position.x > 30) n.position.x = -30;
-                n.rotation.y += 0.02;
-            });
-
+            this.vinyls.forEach(v => v.rotation.z += v.userData.rotSpeed * (this.isPlaying ? 3 : 1));
             spot.position.set(this.mouse.x*30, this.mouse.y*20, 10);
-            this.camera.lookAt(0,0,0);
             count += 0.5;
             this.renderer.render(this.scene, this.camera);
         };
         animate();
-
         window.addEventListener('mousemove', (e) => {
             this.targetMouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             this.targetMouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -213,19 +174,13 @@ class SoundJourney {
 
     setupEventListeners() {
         window.addEventListener('scroll', () => {
-            const scroll = window.scrollY;
-            const progress = Math.min(scroll / window.innerHeight, 1);
-            this.camera.position.z = 15 - (progress * 10);
+            const prog = Math.min(window.scrollY / window.innerHeight, 1);
+            this.camera.position.z = 15 - (prog * 10);
             const hero = document.getElementById('hero');
-            const listView = document.getElementById('list-view');
-            hero.style.opacity = 1 - (progress * 2);
-            if (progress > 0.4) {
-                listView.classList.add('active-view');
-                listView.style.opacity = (progress-0.4)*2;
-            } else {
-                listView.classList.remove('active-view');
-                listView.style.opacity = 0;
-            }
+            const list = document.getElementById('list-view');
+            hero.style.opacity = 1 - (prog * 2);
+            if (prog > 0.4) { list.classList.add('active-view'); list.style.opacity = (prog-0.4)*2; }
+            else { list.classList.remove('active-view'); list.style.opacity = 0; }
         });
         document.getElementById('login-btn-hero')?.addEventListener('click', () => this.login());
         document.querySelectorAll('.filter-btn').forEach(btn => {
@@ -243,7 +198,7 @@ class SoundJourney {
         const user = await this.fetchWebApi('me');
         if (user) {
             const avatar = document.getElementById('user-avatar');
-            if (avatar) { avatar.style.display = 'block'; avatar.src = user.images[0]?.url; }
+            if (avatar) { avatar.style.display = 'block'; avatar.src = user.images[0].url; }
             document.getElementById('hero-title').textContent = `¡Hola, ${user.display_name.split(' ')[0]}!`;
         }
     }
